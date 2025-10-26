@@ -1,0 +1,186 @@
+GO — Debian + VS Code
+==========================================
+
+Requisitos previos
+------------------
+- Go instalado (via APT o tarball oficial).
+- VS Code con la extensión “Go” (golang.go).
+- Git (opcional pero recomendado).
+
+Estructura mínima recomendada
+-----------------------------
+Ejecutable simple (un binario):
+  myapp/
+  ├─ go.mod
+  ├─ cmd/
+  │  └─ myapp/
+  │     └─ main.go
+  ├─ internal/              # lógica de negocio (no exportada a otros módulos)
+  │  └─ core/
+  │     ├─ service.go
+  │     └─ service_test.go
+  └─ pkg/                   # librerías exportables (si las hubiera)
+     └─ util/
+        └─ strings.go
+
+Componentes principales
+-----------------------
+1) MÓDULO (go.mod)
+   - Define el nombre del módulo y gestiona dependencias.
+   - Se crea con:  go mod init <ruta_del_módulo>
+   - Ej.: go mod init example.com/myapp  (si vas a publicarlo en GitHub, usa github.com/usuario/repo)
+
+2) PAQUETES (packages)
+   - Cada carpeta con .go es un paquete. “package main” compila a ejecutable (requiere func main()).
+   - Paquetes de librería usan “package <nombre>” (sin main).
+
+3) FUNCIONES, STRUCTS e INTERFACES
+   - Go organiza la lógica en funciones y métodos sobre structs.
+   - Interfaces definen comportamientos (contratos) y permiten implementar dependencias intercambiables (testing, mocks).
+
+4) TESTS
+   - Archivos terminados en _test.go, con funciones TestXxx(t *testing.T).
+   - Se ejecutan con: go test ./...
+
+5) HERRAMIENTAS (formateo, lint, debug)
+   - Formato: gofmt -w .  (VS Code puede hacerlo al guardar)
+   - Imports: goimports (viene con la extensión Go)
+   - Linter recomendado: golangci-lint (go install ...@latest)
+   - Debugger: Delve (dlv)
+
+Crear un proyecto desde cero
+----------------------------
+# 1) Crear carpeta y módulo
+mkdir -p ~/dev/myapp/cmd/myapp && cd ~/dev/myapp
+go mod init example.com/myapp
+
+# 2) Crear punto de entrada (main)
+cat > cmd/myapp/main.go <<'EOF'
+package main
+
+import (
+	"fmt"
+
+	"example.com/myapp/internal/core"
+)
+
+func main() {
+	msg := core.Hello("Valen")
+	fmt.Println(msg)
+}
+EOF
+
+# 3) Crear lógica interna (paquete de negocio)
+mkdir -p internal/core
+cat > internal/core/service.go <<'EOF'
+package core
+
+import "fmt"
+
+func Hello(name string) string {
+	return fmt.Sprintf("Hola, %s 👋 desde Go!", name)
+}
+EOF
+
+# 4) Tests básicos
+cat > internal/core/service_test.go <<'EOF'
+package core
+
+import "testing"
+
+func TestHello(t *testing.T) {
+	got := Hello("Tester")
+	want := "Hola, Tester 👋 desde Go!"
+	if got != want {
+		t.Fatalf("resultado inesperado: got=%q want=%q", got, want)
+	}
+}
+EOF
+
+Ejecutar, compilar y probar
+---------------------------
+# Ejecutar “en caliente” (compila en memoria y corre)
+go run ./cmd/myapp
+
+# Compilar binario
+mkdir -p bin
+go build -o bin/myapp ./cmd/myapp
+./bin/myapp
+
+# Correr tests
+go test ./...
+
+# Ver cobertura (opcional)
+go test ./... -cover
+
+Manejo de dependencias
+----------------------
+- Agregar/usar paquetes externos: importarlos en tu .go y luego
+  go mod tidy   # sincroniza go.mod y go.sum
+- Actualizar:  go get -u ./...  (actualiza a últimas compatibles)
+- Limpieza:    go mod tidy
+
+Formateo, calidad y utilidades
+------------------------------
+# Formato de código (aplica a todos los .go del proyecto)
+gofmt -w .
+
+# Vet (chequeos estáticos comunes)
+go vet ./...
+
+# Linter (opcional, recomendado)
+go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+~/.local/bin/golangci-lint run   # o $HOME/go/bin/golangci-lint según tu PATH
+
+Depuración con Delve + VS Code
+------------------------------
+# Instalar Delve
+go install github.com/go-delve/delve/cmd/dlv@latest
+
+# Asegurar PATH
+echo 'export PATH="$PATH:$HOME/go/bin"' >> ~/.profile
+source ~/.profile
+
+# Archivo .vscode/launch.json mínimo
+mkdir -p .vscode
+cat > .vscode/launch.json <<'EOF'
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug (myapp)",
+      "type": "go",
+      "request": "launch",
+      "mode": "auto",
+      "program": "${workspaceFolder}/cmd/myapp"
+    }
+  ]
+}
+EOF
+
+# Cómo usar
+- Abrí la carpeta del proyecto en VS Code.
+- Poné breakpoints en main.go o en la lógica interna.
+- Presioná F5 para iniciar la depuración.
+
+Atajos mentales (resumen)
+-------------------------
+- go mod init …        -> “crear módulo”
+- go run ./cmd/app     -> “ejecutar app”
+- go build -o bin/app  -> “compilar binario”
+- go test ./...        -> “correr tests”
+- gofmt -w .           -> “formatear”
+- go vet ./...         -> “chequeos básicos”
+- dlv + F5 (VS Code)   -> “depurar con breakpoints”
+
+Consejos prácticos
+------------------
+- Hacé commits pequeños y frecuentes.
+- Usá internal/ para encapsular lógica (evita depender “por accidente” de tus paquetes).
+- Escribí tests pequeños y claros; probá comportamiento, no implementación.
+- Corré go fmt y go vet antes de commitear (o agregalo a tu CI).
+- Para proyectos más grandes, usá cmd/<app> para tus ejecutables y separá paquetes de dominio (internal/core, internal/infra, etc.).
+
+Fin
+---
+
